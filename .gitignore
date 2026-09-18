@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+storage/receipts/*
+storage/statements/*
+storage/documents/*
+backups/*
+!storage/receipts/.gitkeep
+!storage/statements/.gitkeep
+!storage/documents/.gitkeep
+!backups/.gitkeep
