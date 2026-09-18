@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block heading %}Transactions{% endblock %}
+{% block content %}
+<section class="panel" id="new">
+  <div class="panel-head"><div><span class="eyebrow">QUICK ENTRY</span><h2>Add transaction</h2></div></div>
+  <form class="form-grid" method="post" enctype="multipart/form-data">
+    <label>Type<select name="transaction_type" id="txType"><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option></select></label>
+    <label>Amount<input name="amount" inputmode="decimal" placeholder="45000" required></label>
+    <label>Paid from / charged to<select name="account_id" required>{% for a in active_accounts %}<option value="{{ a.id }}">{{ a.name }}{{ ' · Credit card' if a.account_type == 'credit' else '' }}</option>{% endfor %}</select></label>
+    <label id="categoryField">Category<select name="category_id" id="categorySelect">{% for c in categories %}<option value="{{ c.id }}" data-kind="{{ c.kind }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}</select></label>
+    <label id="destinationField" class="hidden">To account<select name="destination_account_id"><option value="">Choose account</option>{% for a in active_accounts %}<option value="{{ a.id }}">{{ a.name }}{{ ' · Pay credit card' if a.account_type == 'credit' else '' }}</option>{% endfor %}</select></label>
+    <label>Date & time<input type="datetime-local" name="occurred_at" value="{{ now.strftime('%Y-%m-%dT%H:%M') }}"></label>
+    <label class="span-2">Description<input name="description" placeholder="What was this for?"></label>
+    <label class="span-2">Receipt / attachment<input type="file" name="attachment" accept=".png,.jpg,.jpeg,.webp,.pdf,.csv,.txt"></label>
+    <div class="span-2 form-actions"><button class="btn primary">Save transaction</button></div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><div><span class="eyebrow">HISTORY</span><h2>All transactions</h2></div></div>
+  <form class="filters" method="get"><input name="q" value="{{ search }}" placeholder="Search description"><select name="type"><option value="">All types</option>{% for t in ['income','expense','transfer'] %}<option value="{{ t }}" {{ 'selected' if selected_type == t }}>{{ t|title }}</option>{% endfor %}</select><select name="account"><option value="">All accounts</option>{% for a in accounts %}<option value="{{ a.id }}" {{ 'selected' if selected_account == a.id }}>{{ a.name }}</option>{% endfor %}</select><button class="btn">Filter</button></form>
+  <div class="table-wrap"><table><thead><tr><th>Date</th><th>Details</th><th>Account</th><th>Type</th><th class="right">Amount</th><th></th></tr></thead><tbody>
+  {% for tx in transactions %}<tr><td>{{ tx.occurred_at.strftime('%d %b %Y') }}<small>{{ tx.occurred_at.strftime('%H:%M') }}</small></td><td><strong>{{ tx.description or (tx.category.name if tx.category else 'Transfer') }}</strong><small>{{ tx.category.icon ~ ' ' ~ tx.category.name if tx.category else (tx.destination_account.name if tx.destination_account else '') }}</small></td><td>{{ tx.account.name }}</td><td><span class="badge {{ tx.transaction_type }}">{{ tx.transaction_type }}</span></td><td class="right amount {{ 'positive' if tx.transaction_type == 'income' else ('negative' if tx.transaction_type == 'expense' else '') }}">{{ tx.amount|money }}</td><td class="right"><form method="post" action="{{ url_for('main.delete_transaction', transaction_id=tx.id) }}" onsubmit="return confirm('Delete this transaction?')"><button class="link danger">Delete</button></form></td></tr>
+  {% else %}<tr><td colspan="6" class="empty">Nothing here yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}
+{% block scripts %}<script>window.setupTransactionForm && window.setupTransactionForm();</script>{% endblock %}

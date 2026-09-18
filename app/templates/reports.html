@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block heading %}Reports{% endblock %}{% block content %}
+<section class="panel"><div class="panel-head"><div><span class="eyebrow">YEAR VIEW</span><h2>Income vs expense</h2></div><input class="year-input" id="reportYear" type="number" value="{{ now.year }}"></div><div class="chart-wrap report"><canvas id="yearlyChart"></canvas></div></section>
+<section class="panel"><div class="panel-head"><div><span class="eyebrow">NET</span><h2>Monthly net cash flow</h2></div></div><div class="chart-wrap report"><canvas id="netChart"></canvas></div></section>
+{% endblock %}{% block scripts %}<script src="{{ url_for('static', filename='js/reports.js') }}"></script>{% endblock %}

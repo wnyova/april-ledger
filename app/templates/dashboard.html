@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block heading %}Dashboard{% endblock %}
+{% block content %}
+<section class="hero-card">
+  <div><span class="muted">Net position</span><div class="hero-value">{{ totals.net_worth|money }}</div><span class="muted">Assets minus credit-card debt</span></div>
+  <a class="btn primary" href="{{ url_for('main.transactions') }}#new">+ Add transaction</a>
+</section>
+
+<section class="metric-grid">
+  <article class="metric"><span>Available assets</span><strong>{{ totals.assets|money }}</strong></article>
+  <article class="metric"><span>Credit-card outstanding</span><strong class="negative">{{ totals.credit_debt|money }}</strong></article>
+  <article class="metric"><span>Income this month</span><strong class="positive">{{ summary.income|money }}</strong></article>
+  <article class="metric"><span>Expense this month</span><strong class="negative">{{ summary.expense|money }}</strong></article>
+  <article class="metric"><span>Net cash flow</span><strong>{{ summary.net|money }}</strong></article>
+  <article class="metric"><span>Savings rate</span><strong>{{ '%.1f'|format(summary.savings_rate) }}%</strong></article>
+</section>
+
+{% if credit_accounts %}
+<section class="panel">
+  <div class="panel-head"><div><span class="eyebrow">CREDIT CARDS</span><h2>Limits & amounts to pay</h2></div><a href="{{ url_for('main.accounts') }}">Manage cards</a></div>
+  <div class="credit-dashboard-grid">
+    {% for card in credit_accounts %}
+    {% set due = balances.get(card.id, 0) %}
+    <article class="credit-dashboard-card">
+      <div><strong>{{ card.name }}</strong><span>{{ card.institution or 'Credit card' }}{% if card.last_four %} · •••• {{ card.last_four }}{% endif %}</span></div>
+      <div class="credit-dashboard-values">
+        <div><span>To pay</span><b class="negative">{{ due|money }}</b></div>
+        <div><span>Remaining limit</span><b>{{ (card.credit_limit - due)|money if card.credit_limit else 'Not set' }}</b></div>
+        <div><span>Total limit</span><b>{{ card.credit_limit|money if card.credit_limit else 'Not set' }}</b></div>
+      </div>
+      {% if card.credit_limit %}<div class="progress credit"><span style="width: {{ [((due / card.credit_limit) * 100)|float, 100]|min }}%"></span></div>{% endif %}
+      <small>Statement day {{ card.statement_day or '—' }} · Due day {{ card.due_day or '—' }}</small>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="dashboard-grid">
+  <article class="panel panel-wide"><div class="panel-head"><div><span class="eyebrow">14 DAYS</span><h2>Cash flow</h2></div></div><div class="chart-wrap"><canvas id="cashflowChart"></canvas></div></article>
+  <article class="panel"><div class="panel-head"><div><span class="eyebrow">THIS MONTH</span><h2>Spending</h2></div></div><div class="chart-wrap donut"><canvas id="categoryChart"></canvas></div></article>
+
+  <article class="panel panel-wide">
+    <div class="panel-head"><div><span class="eyebrow">LATEST</span><h2>Recent transactions</h2></div><a href="{{ url_for('main.transactions') }}">View all</a></div>
+    <div class="list">
+      {% for tx in recent %}
+      <div class="list-row">
+        <div class="row-icon">{{ tx.category.icon if tx.category else '↔' }}</div>
+        <div class="row-main"><strong>{{ tx.description or (tx.category.name if tx.category else 'Transfer') }}</strong><span>{{ tx.occurred_at.strftime('%d %b • %H:%M') }} · {{ tx.account.name }}</span></div>
+        <div class="amount {{ 'positive' if tx.transaction_type == 'income' else ('muted' if tx.transaction_type == 'transfer' else 'negative') }}">{{ '+' if tx.transaction_type == 'income' else ('↔ ' if tx.transaction_type == 'transfer' else '-') }}{{ tx.amount|money }}</div>
+      </div>
+      {% else %}<div class="empty">No transactions yet.</div>{% endfor %}
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-head"><div><span class="eyebrow">UPCOMING</span><h2>Bills</h2></div><a href="{{ url_for('main.bills') }}">Manage</a></div>
+    <div class="list compact">
+      {% for bill in bills %}
+      <div class="list-row"><div class="row-main"><strong>{{ bill.name }}</strong><span>Due {{ bill.due_date.strftime('%d %b') }}</span></div><div class="amount">{{ bill.amount|money }}</div></div>
+      {% else %}<div class="empty">No unpaid bills. Nice.</div>{% endfor %}
+    </div>
+  </article>
+</section>
+
+{% if budgets %}
+<section class="panel budget-preview"><div class="panel-head"><div><span class="eyebrow">THIS MONTH</span><h2>Budget pulse</h2></div><a href="{{ url_for('main.budgets') }}">Open budgets</a></div>
+<div class="budget-grid">{% for row in budgets[:4] %}<div><div class="budget-label"><span>{{ row.budget.category.icon }} {{ row.budget.category.name }}</span><span>{{ '%.0f'|format(row.percent) }}%</span></div><div class="progress"><span style="width: {{ [row.percent,100]|min }}%"></span></div></div>{% endfor %}</div></section>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

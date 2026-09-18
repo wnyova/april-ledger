@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="April Ledger logo">
+  <defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#34d399"/><stop offset="1" stop-color="#14b8a6"/></linearGradient></defs>
+  <rect width="128" height="128" rx="34" fill="#111820"/>
+  <path d="M27 87 48 39h15l22 48H70l-5-12H46l-5 12H27Zm24-25h10l-5-13-5 13Z" fill="url(#g)"/>
+  <path d="M78 38v38h23v11H65V38h13Z" fill="#edf4f1" opacity=".92"/>
+  <path d="M26 101c19-3 37-1 51-8 10-5 16-12 25-26" fill="none" stroke="url(#g)" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block heading %}Accounts & Cards{% endblock %}
+{% block content %}
+<section class="account-grid">
+  {% for account in accounts %}
+  {% set balance = balances.get(account.id, 0) %}
+  <article class="account-card {{ 'archived' if not account.is_active }}">
+    <div class="account-card-head">
+      <span class="badge {{ 'expense' if account.account_type == 'credit' else 'transfer' }}">{{ 'Credit card' if account.account_type == 'credit' else account.account_type }}</span>
+      {% if not account.is_active %}<span class="badge">Archived</span>{% endif %}
+    </div>
+    <span class="muted">{{ account.institution or account.account_type|title }}{% if account.last_four %} · •••• {{ account.last_four }}{% endif %}</span>
+    <h2>{{ account.name }}</h2>
+
+    {% if account.account_type == 'credit' %}
+      <span class="account-caption">Amount to pay</span>
+      <strong class="negative">{{ balance|money }}</strong>
+      <div class="credit-stats">
+        <div><span>Limit</span><b>{{ account.credit_limit|money if account.credit_limit else 'Not set' }}</b></div>
+        <div><span>Remaining</span><b>{{ (account.credit_limit - balance)|money if account.credit_limit else 'Not set' }}</b></div>
+      </div>
+      {% if account.credit_limit %}<div class="progress credit"><span style="width: {{ [((balance / account.credit_limit) * 100)|float, 100]|min }}%"></span></div>{% endif %}
+      <small>Statement day {{ account.statement_day or '—' }} · Due day {{ account.due_day or '—' }}</small>
+    {% else %}
+      <span class="account-caption">Current balance</span>
+      <strong>{{ balance|money }}</strong>
+      <small>Opening {{ account.opening_balance|money }}</small>
+    {% endif %}
+
+    <details class="account-edit">
+      <summary>Edit details</summary>
+      <form class="form-grid compact-form" method="post" action="{{ url_for('main.edit_account', account_id=account.id) }}">
+        <label>Name<input name="name" value="{{ account.name }}" required></label>
+        <label>Type<select name="account_type" class="accountType"><option value="bank" {{ 'selected' if account.account_type == 'bank' }}>Bank</option><option value="cash" {{ 'selected' if account.account_type == 'cash' }}>Cash</option><option value="ewallet" {{ 'selected' if account.account_type == 'ewallet' }}>E-wallet</option><option value="credit" {{ 'selected' if account.account_type == 'credit' }}>Credit card</option><option value="investment" {{ 'selected' if account.account_type == 'investment' }}>Investment</option></select></label>
+        <label>Institution<input name="institution" value="{{ account.institution or '' }}"></label>
+        <label class="openingLabel">{{ 'Opening debt' if account.account_type == 'credit' else 'Opening balance' }}<input name="opening_balance" value="{{ account.opening_balance }}"></label>
+        <div class="creditFields span-2 form-grid {{ 'hidden' if account.account_type != 'credit' }}">
+          <label>Credit limit<input name="credit_limit" value="{{ account.credit_limit or '' }}" inputmode="decimal"></label>
+          <label>Last 4 digits<input name="last_four" value="{{ account.last_four or '' }}" inputmode="numeric" maxlength="4"></label>
+          <label>Statement day<input name="statement_day" value="{{ account.statement_day or '' }}" type="number" min="1" max="31"></label>
+          <label>Due day<input name="due_day" value="{{ account.due_day or '' }}" type="number" min="1" max="31"></label>
+        </div>
+        <label class="span-2">Note<input name="note" value="{{ account.note or '' }}"></label>
+        <div class="span-2"><button class="btn primary">Save changes</button></div>
+      </form>
+    </details>
+    <div class="account-actions">
+      <form method="post" action="{{ url_for('main.archive_account', account_id=account.id) }}"><button class="link">{{ 'Restore' if not account.is_active else 'Archive' }}</button></form>
+      <form method="post" action="{{ url_for('main.delete_account', account_id=account.id) }}" onsubmit="return confirm('Delete this account? Only unused accounts can be deleted.')"><button class="link danger">Delete</button></form>
+    </div>
+  </article>
+  {% else %}<div class="empty">No accounts yet.</div>{% endfor %}
+</section>
+
+<section class="panel">
+  <div class="panel-head"><div><span class="eyebrow">NEW</span><h2>Add bank, wallet, or credit card</h2></div></div>
+  <form class="form-grid accountForm" method="post">
+    <label>Name<input name="name" placeholder="BCA / Jenius CC" required></label>
+    <label>Type<select name="account_type" class="accountType"><option value="bank">Bank</option><option value="cash">Cash</option><option value="ewallet">E-wallet</option><option value="credit">Credit card</option><option value="investment">Investment</option></select></label>
+    <label>Institution<input name="institution" placeholder="Bank / provider"></label>
+    <label class="openingLabel">Opening balance<input name="opening_balance" placeholder="0"></label>
+    <div class="creditFields span-2 form-grid hidden">
+      <label>Credit limit<input name="credit_limit" placeholder="18000000" inputmode="decimal"></label>
+      <label>Last 4 digits<input name="last_four" placeholder="1234" inputmode="numeric" maxlength="4"></label>
+      <label>Statement day<input name="statement_day" type="number" min="1" max="31" placeholder="20"></label>
+      <label>Due day<input name="due_day" type="number" min="1" max="31" placeholder="10"></label>
+    </div>
+    <label class="span-2">Note<input name="note" placeholder="Optional"></label>
+    <div class="span-2"><button class="btn primary">Add account</button></div>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script>window.setupAccountForms && window.setupAccountForms();</script>{% endblock %}

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>{% block title %}April Ledger{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><img src="{{ url_for('static', filename='img/logo.svg') }}" alt=""></div>
+        <div><strong>April Ledger</strong><span>Personal finance</span></div>
+      </div>
+      <nav>
+        {% set items = [
+          ('dashboard','main.dashboard','⌂','Dashboard'),('transactions','main.transactions','↕','Transactions'),
+          ('accounts','main.accounts','◫','Accounts'),('budgets','main.budgets','◌','Budgets'),
+          ('bills','main.bills','◇','Bills'),('reports','main.reports','⌁','Reports'),
+          ('files','main.files','▣','Files'),('settings','main.settings','⚙','Settings')
+        ] %}
+        {% for key, endpoint, icon, label in items %}
+        <a class="nav-link {{ 'active' if page == key else '' }}" href="{{ url_for(endpoint) }}"><span>{{ icon }}</span>{{ label }}</a>
+        {% endfor %}
+      </nav>
+      <div class="sidebar-note">Your money, clearly mapped.</div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <button class="icon-btn mobile-only" id="menuToggle" aria-label="Open menu">☰</button>
+        <div>
+          <span class="eyebrow">APRIL LEDGER</span>
+          <h1>{% block heading %}Dashboard{% endblock %}</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="date-chip">{{ now.strftime('%d %b %Y') }}</span>
+          <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">◐</button>
+        </div>
+      </header>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}<div class="flash {{ category }}">{{ message }}</div>{% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
