@@ -5,8 +5,10 @@ from pathlib import Path
 
 from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from sqlalchemy import func, or_
+from sqlalchemy.exc import SQLAlchemyError
 
 from .extensions import db
+from .editing import EditConflict, bill_values, check_revision, record_revision, transaction_values
 from .models import Account, Attachment, Bill, Budget, Category, Transaction
 from .services import (
     account_balances,
@@ -22,17 +24,6 @@ from .services import (
 )
 
 bp = Blueprint("main", __name__)
-
-
-def _parse_datetime(raw):
-    if not raw:
-        return datetime.now()
-    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(raw, fmt)
-        except ValueError:
-            pass
-    raise ValueError("Invalid date/time")
 
 
 def _to_int(raw, default=None):
@@ -164,38 +155,7 @@ def dashboard_api():
 def transactions():
     if request.method == "POST":
         try:
-            transaction_type = request.form.get("transaction_type", "expense").lower()
-            if transaction_type not in {"income", "expense", "transfer"}:
-                raise ValueError("Invalid transaction type")
-            amount = parse_money(request.form.get("amount"))
-            account_id = _to_int(request.form.get("account_id"))
-            account = db.session.get(Account, account_id)
-            if not account or not account.is_active:
-                raise ValueError("Account is required")
-
-            destination_id = _to_int(request.form.get("destination_account_id"))
-            destination = db.session.get(Account, destination_id) if destination_id else None
-            if transaction_type == "transfer":
-                if not destination or not destination.is_active or destination.id == account.id:
-                    raise ValueError("Transfer destination must be a different account")
-
-            category = None
-            category_id = _to_int(request.form.get("category_id"))
-            if transaction_type != "transfer":
-                category = db.session.get(Category, category_id) if category_id else None
-                if not category or category.kind != transaction_type:
-                    raise ValueError(f"Choose a valid {transaction_type} category")
-
-            tx = Transaction(
-                occurred_at=_parse_datetime(request.form.get("occurred_at")),
-                transaction_type=transaction_type,
-                amount=amount,
-                description=(request.form.get("description") or "").strip()[:255] or None,
-                source="web",
-                account=account,
-                destination_account=destination,
-                category=category,
-            )
+            tx = Transaction(source="web", **transaction_values(request.form))
             db.session.add(tx)
             db.session.flush()
             upload = request.files.get("attachment")
@@ -229,7 +189,49 @@ def transactions():
         search=search,
         selected_type=tx_type or "",
         selected_account=account_id,
+        values={"transaction_type": "expense", "occurred_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S")},
     )
+
+
+@bp.route("/transactions/<int:transaction_id>/edit", methods=["GET", "POST"])
+def edit_transaction(transaction_id):
+    query = Transaction.query.filter_by(id=transaction_id)
+    tx = query.populate_existing().with_for_update().first() if request.method == "POST" else query.first()
+    if tx is None:
+        abort(404)
+    error = None
+    status = 200
+    if request.method == "POST":
+        try:
+            check_revision(tx, request.form.get("revision"))
+            values = transaction_values(request.form, original=tx)
+            for key, value in values.items():
+                setattr(tx, key, value)
+            db.session.commit()
+            flash("Transaction updated. Balances and reports have been recalculated.", "success")
+            return redirect(url_for("main.transactions"))
+        except ValueError as exc:
+            db.session.rollback()
+            error = str(exc)
+            status = 409 if isinstance(exc, EditConflict) else 400
+        except SQLAlchemyError:
+            db.session.rollback()
+            current_app.logger.exception("Could not update transaction %s", transaction_id)
+            error, status = "Could not save the transaction. No changes were saved.", 500
+    values = request.form if request.method == "POST" else {
+        "transaction_type": tx.transaction_type, "amount": str(tx.amount),
+        "account_id": str(tx.account_id), "destination_account_id": str(tx.destination_account_id or ""),
+        "category_id": str(tx.category_id or ""), "description": tx.description or "",
+        "occurred_at": tx.occurred_at.strftime("%Y-%m-%dT%H:%M:%S"),
+        "revision": record_revision(tx),
+    }
+    # Keep existing archived accounts selectable without offering unrelated archives.
+    accounts = Account.query.filter(or_(Account.is_active.is_(True), Account.id.in_(
+        [tx.account_id, tx.destination_account_id] if tx.destination_account_id else [tx.account_id]
+    ))).order_by(Account.name).all()
+    return render_template("transaction_edit.html", page="transactions", tx=tx, values=values,
+                           active_accounts=accounts, categories=Category.query.order_by(Category.kind, Category.name).all(),
+                           error=error), status
 
 
 @bp.post("/transactions/<int:transaction_id>/delete")
@@ -379,20 +381,7 @@ def delete_budget(budget_id):
 def bills():
     if request.method == "POST":
         try:
-            name = (request.form.get("name") or "").strip()[:120]
-            if not name:
-                raise ValueError("Bill name is required")
-            amount = parse_money(request.form.get("amount"))
-            due_date = datetime.strptime(request.form.get("due_date"), "%Y-%m-%d").date()
-            bill = Bill(
-                name=name,
-                amount=amount,
-                due_date=due_date,
-                recurrence=request.form.get("recurrence", "none")[:20],
-                category_id=_to_int(request.form.get("category_id")),
-                account_id=_to_int(request.form.get("account_id")),
-                note=(request.form.get("note") or "").strip()[:255] or None,
-            )
+            bill = Bill(**bill_values(request.form))
             db.session.add(bill)
             db.session.commit()
             flash("Bill added.", "success")
@@ -405,31 +394,71 @@ def bills():
         "bills.html",
         page="bills",
         bills=Bill.query.order_by(Bill.status.asc(), Bill.due_date.asc()).all(),
+        values={"recurrence": "none"},
+        paid=False,
         categories=Category.query.filter_by(kind="expense").order_by(Category.name).all(),
         accounts=Account.query.filter_by(is_active=True).order_by(Account.name).all(),
     )
 
 
+@bp.route("/bills/<int:bill_id>/edit", methods=["GET", "POST"])
+def edit_bill(bill_id):
+    query = Bill.query.filter_by(id=bill_id)
+    bill = query.populate_existing().with_for_update().first() if request.method == "POST" else query.first()
+    if bill is None:
+        abort(404)
+    error = None
+    status = 200
+    if request.method == "POST":
+        try:
+            check_revision(bill, request.form.get("revision"))
+            values = bill_values(request.form, original=bill)
+            for key, value in values.items():
+                setattr(bill, key, value)
+            db.session.commit()
+            flash("Bill updated. Existing payments and other bill entries were kept unchanged.", "success")
+            return redirect(url_for("main.bills"))
+        except ValueError as exc:
+            db.session.rollback()
+            error = str(exc)
+            status = 409 if isinstance(exc, EditConflict) else 400
+        except SQLAlchemyError:
+            db.session.rollback()
+            current_app.logger.exception("Could not update bill %s", bill_id)
+            error, status = "Could not save the bill. No changes were saved.", 500
+    values = request.form if request.method == "POST" else {
+        "name": bill.name, "amount": str(bill.amount), "due_date": bill.due_date.isoformat(),
+        "recurrence": bill.recurrence, "account_id": str(bill.account_id or ""),
+        "category_id": str(bill.category_id or ""), "note": bill.note or "", "revision": record_revision(bill),
+    }
+    accounts = Account.query.filter(or_(Account.is_active.is_(True), Account.id == bill.account_id)).order_by(Account.name).all()
+    return render_template("bill_edit.html", page="bills", bill=bill, paid=bill.status == "paid",
+                           values=values, accounts=accounts,
+                           categories=Category.query.filter_by(kind="expense").order_by(Category.name).all(), error=error), status
+
+
 @bp.post("/bills/<int:bill_id>/pay")
 def pay_bill(bill_id):
-    bill = db.session.get(Bill, bill_id)
-    if not bill:
+    # Serialize payment/edit requests for this bill on MariaDB/MySQL.
+    bill = Bill.query.filter_by(id=bill_id).populate_existing().with_for_update().first()
+    if bill is None:
         abort(404)
-    if bill.status != "paid":
+    try:
+        if bill.status == "paid":
+            db.session.rollback()
+            return redirect(url_for("main.bills"))
+        if request.form.get("create_transaction") == "1":
+            if not bill.account or not bill.account.is_active:
+                raise ValueError("Edit this bill and choose an active payment account before logging the expense.")
+            if bill.category and bill.category.kind != "expense":
+                raise ValueError("Edit this bill and choose an expense category before paying.")
+            db.session.add(Transaction(
+                occurred_at=datetime.now(), transaction_type="expense", amount=bill.amount,
+                description=bill.name, source="bill", account_id=bill.account_id, category_id=bill.category_id,
+            ))
+        next_due = _next_due_date(bill.due_date, bill.recurrence)
         bill.status = "paid"
         bill.paid_at = datetime.now()
-        if request.form.get("create_transaction") == "1" and bill.account_id:
-            tx = Transaction(
-                occurred_at=datetime.now(),
-                transaction_type="expense",
-                amount=bill.amount,
-                description=bill.name,
-                source="bill",
-                account_id=bill.account_id,
-                category_id=bill.category_id,
-            )
-            db.session.add(tx)
-        next_due = _next_due_date(bill.due_date, bill.recurrence)
         if next_due:
             exists = Bill.query.filter_by(name=bill.name, due_date=next_due, status="unpaid").first()
             if not exists:
@@ -439,6 +468,13 @@ def pay_bill(bill_id):
                 ))
         db.session.commit()
         flash("Bill marked as paid.", "success")
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.exception("Could not pay bill %s", bill_id)
+        flash("Could not save the payment. No changes were saved.", "error")
     return redirect(url_for("main.bills"))
 
 

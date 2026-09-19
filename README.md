@@ -10,6 +10,8 @@ This guide uses **MariaDB** and **manual startup** for the website and bot. They
 
 - Dashboard with balances, income, expenses, spending charts, and yearly reports
 - Income, expense, and transfers across bank, cash, e-wallet, and investment accounts
+- Edit transactions with balance/report recalculation and preserved attachments
+- Edit bills with protection for paid amounts and payment history
 - Add, edit, archive, restore, and safely delete unused accounts
 - Multiple credit cards, each with its own limit, outstanding debt, remaining limit, statement day, and due day
 - Monthly budgets, bills, and recurring bill entries
@@ -224,6 +226,33 @@ The bot uses long polling with outbound internet access. It does not need a publ
 
 Run only **one bot instance**. The current code drops queued updates on startup, so send transactions while the bot is online. After editing `.env` while the bot runs, stop it with Ctrl+C and start it again to load the new values.
 
+## Editing transactions and bills
+
+Use the **Edit** link beside a row in **Transactions** or **Bills**. The form opens with the current values; choose **Save changes** to apply the correction or **Cancel** to leave it unchanged.
+
+### Transactions
+
+You can correct the type, amount, source account/card, transfer destination, category, date/time, and description. Edits update the existing transaction rather than creating another one. Account balances, credit-card debt and remaining limits, budgets, and reports are calculated from the corrected history.
+
+Existing attachments and the original source (`web`, `telegram`, or `bill`) are preserved. Switching to a transfer clears the category; switching to income/expense clears the transfer destination. Transfers require two different accounts, and income/expense requires a matching category. Existing uncategorized entries (such as older bill payments) may keep their empty category when their transaction type stays the same. An existing archived account can be retained when correcting historical records; unrelated archived accounts cannot be selected.
+
+### Bills
+
+| Bill state | Editable fields |
+| --- | --- |
+| Unpaid | Name, amount, due date, recurrence, category, payment account, and note |
+| Paid | Name, due date, and note only |
+
+Saving an unpaid bill does not spend money or mark it paid. Changes affect only the selected bill, not other existing occurrences. Its next recurring occurrence is created when it is paid, using the values saved on that bill. **Mark paid + log expense** requires an active payment account; if none is set, edit the bill and choose one first.
+
+For paid bills, the amount, account, category, recurrence, and payment status are locked on the server as well as in the form. This protects existing payment history and prevents accidentally logging another expense. To correct an actual payment, find the corresponding entry in **Transactions**. To change future payments, edit the next unpaid bill.
+
+**Paid bills and their recorded expenses are separate records in the current database.** Editing a transaction does not automatically rewrite a paid bill, and editing a paid bill's name/note/due date does not rewrite its transaction or future bills. The app does not guess links between old records.
+
+Invalid edits leave the original record unchanged and show an error while retaining your submitted values. If another tab changes or pays a record after you opened its edit form, saving is rejected; reload the edit page and review the latest values before trying again.
+
+This feature adds no database columns and requires no schema migration or new Python dependencies. Web and bot startup remain manual.
+
 ## Telegram usage
 
 These examples create real transactions. Create the referenced accounts first or substitute your own names:
@@ -342,3 +371,13 @@ Pull updates repository files. It does not automatically start or restart the we
 Transactions and settings are stored in MariaDB. Uploaded files live under `storage/`. A database backup includes attachment metadata, not the uploaded files themselves. Preserve both the database and `storage/` when backing up or moving servers, and keep a private copy of `.env`.
 
 Git excludes `.env`, `.venv/`, uploads, and database backups. Source code on GitHub is not a backup of your financial records. The helper under `scripts/` is provided separately; this guide does not schedule backups.
+
+## Development checks
+
+Run the regression suite from the repository root after installing `requirements.txt`:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+The suite uses a separate, temporary SQLite database and temporary files; it does not connect to your configured MariaDB database. It covers balance/debt recalculation, transfers, reports, attachments, invalid and stale edits, paid-bill restrictions, and repeated bill payments. MariaDB/MySQL payment and edit routes also use row locks; SQLite tests do not exercise those database-specific concurrent locks.

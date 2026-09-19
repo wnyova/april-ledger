@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block heading %}Edit transaction{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-head"><div><span class="eyebrow">TRANSACTION #{{ tx.id }}</span><h2>Correct transaction details</h2></div><a class="btn" href="{{ url_for('main.transactions') }}">Back to transactions</a></div>
+  <p>Saving updates this transaction and recalculates balances and reports. Existing attachments and the original source are preserved.</p>
+  {% if tx.source == 'bill' %}<p>This is a recorded bill payment. Editing it changes the ledger only; the paid bill and future bill entries remain unchanged.</p>{% endif %}
+  {% if error %}<p class="flash error" role="alert">{{ error }}</p>{% endif %}
+  <form class="form-grid" method="post">
+    <input type="hidden" name="revision" value="{{ values.get('revision', '') }}">
+    {% include '_transaction_fields.html' %}
+    {% if tx.attachments %}<div class="span-2"><strong>Existing attachments</strong><ul>{% for attachment in tx.attachments %}<li><a href="{{ url_for('main.download_file', attachment_id=attachment.id) }}">{{ attachment.original_name }}</a></li>{% endfor %}</ul></div>{% endif %}
+    <div class="span-2 form-actions"><button class="btn primary" type="submit">Save changes</button><a class="btn" href="{{ url_for('main.transactions') }}">Cancel</a></div>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script>window.setupTransactionForm && window.setupTransactionForm();</script>{% endblock %}

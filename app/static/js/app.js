@@ -7,7 +7,7 @@
     localStorage.setItem('ledger-theme', root.dataset.theme);
   });
   document.getElementById('menuToggle')?.addEventListener('click', () => document.getElementById('sidebar')?.classList.toggle('open'));
-  setTimeout(() => document.querySelectorAll('.flash').forEach(el => el.classList.add('fade')), 3500);
+  setTimeout(() => document.querySelectorAll('.flash-stack .flash').forEach(el => el.classList.add('fade')), 3500);
 
   window.setupTransactionForm = () => {
     const type = document.getElementById('txType');
@@ -19,12 +19,20 @@
       const isTransfer = type.value === 'transfer';
       categoryField.classList.toggle('hidden', isTransfer);
       destinationField.classList.toggle('hidden', !isTransfer);
+      category.disabled = isTransfer;
+      category.required = !isTransfer && type.value !== category.dataset.uncategorizedKind;
+      const destination = destinationField.querySelector('select');
+      destination.disabled = !isTransfer;
+      destination.required = isTransfer;
+      const previousCategory = category.value;
       [...category.options].forEach(opt => {
         opt.hidden = opt.dataset.kind !== type.value;
         opt.disabled = opt.hidden;
       });
       const first = [...category.options].find(o => !o.disabled);
-      if (first) category.value = first.value;
+      const selected = [...category.options].find(o => o.value === previousCategory && !o.disabled);
+      if (selected) category.value = selected.value;
+      else if (first) category.value = first.value;
     };
     type.addEventListener('change', update); update();
   };

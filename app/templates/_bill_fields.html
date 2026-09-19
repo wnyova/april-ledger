@@ -1,0 +1,8 @@
+<label>Name<input name="name" maxlength="120" required value="{{ values.get('name', '') }}" placeholder="Internet"></label>
+<label>Amount<input name="amount" inputmode="decimal" required value="{{ values.get('amount', '') }}" placeholder="499000" {{ 'readonly' if paid }}></label>
+<label>Due date<input type="date" name="due_date" required value="{{ values.get('due_date', '') }}"></label>
+<label>Recurrence<select name="recurrence" {{ 'disabled' if paid }}>{% for key, label in [('none', 'One-time'), ('monthly', 'Monthly'), ('yearly', 'Yearly')] %}<option value="{{ key }}" {{ 'selected' if values.get('recurrence') == key }}>{{ label }}</option>{% endfor %}</select></label>
+<label>Category<select name="category_id" {{ 'disabled' if paid }}><option value="">None</option>{% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if values.get('category_id') == c.id|string }}>{{ c.icon }} {{ c.name }}</option>{% endfor %}</select></label>
+<label>Pay from<select name="account_id" {{ 'disabled' if paid }}><option value="">Choose later</option>{% for a in accounts %}<option value="{{ a.id }}" {{ 'selected' if values.get('account_id') == a.id|string }}>{{ a.name }}{{ ' (archived)' if not a.is_active else '' }}</option>{% endfor %}</select></label>
+{% if paid %}{% for key in ['recurrence', 'category_id', 'account_id'] %}<input type="hidden" name="{{ key }}" value="{{ values.get(key, '') }}">{% endfor %}{% endif %}
+<label class="span-2">Note<input name="note" maxlength="255" value="{{ values.get('note', '') }}"></label>

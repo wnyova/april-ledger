@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block heading %}Edit bill{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-head"><div><span class="eyebrow">BILL #{{ bill.id }} · {{ bill.status|upper }}</span><h2>Correct bill details</h2></div><a class="btn" href="{{ url_for('main.bills') }}">Back to bills</a></div>
+  {% if paid %}<p>This bill is already paid. You can edit its name, due date, and note. Amount, account, category, recurrence, and payment status are locked to protect payment history.</p><p>To correct the actual payment, find it in <a href="{{ url_for('main.transactions') }}">Transactions</a>. For future payments, edit the next unpaid bill. These are separate records and are not automatically synchronized.</p>
+  {% else %}<p>Changes apply to this bill only. Saving does not mark it paid, create an expense, or change other bill entries. The next recurring bill is created when this bill is paid.</p>{% endif %}
+  {% if error %}<p class="flash error" role="alert">{{ error }}</p>{% endif %}
+  <form class="form-grid" method="post">
+    <input type="hidden" name="revision" value="{{ values.get('revision', '') }}">
+    {% include '_bill_fields.html' %}
+    <div class="span-2 form-actions"><button class="btn primary" type="submit">Save changes</button><a class="btn" href="{{ url_for('main.bills') }}">Cancel</a></div>
+  </form>
+</section>
+{% endblock %}
